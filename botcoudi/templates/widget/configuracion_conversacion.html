@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración de la conversación - BotCoudy{% endblock %}
+{% block header_title %}Configuración de la conversación{% endblock %}
+
+{% block content %}
+<div class="conversation-config-page">
+    <div class="mb-4">
+        <h1>Configuración de la conversación</h1>
+        <p class="text-muted">Define el orden lógico, mensaje y comportamiento de los bloques que usa el widget de prueba.</p>
+    </div>
+
+    {% if saved %}
+    <div class="dashboard-card conversation-save-banner">
+        Cambios guardados correctamente.
+    </div>
+    {% endif %}
+
+    <form method="post" class="conversation-config-form">
+        {% csrf_token %}
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+        <div class="dashboard-card conversation-error-banner">
+            {{ formset.non_form_errors }}
+        </div>
+        {% endif %}
+
+        <div class="conversation-config-grid">
+            {% for form in formset %}
+            <div class="dashboard-card conversation-block-card">
+                {{ form.id }}
+                <div class="conversation-block-top">
+                    <div class="conversation-block-order">{{ form.order.value|default:form.instance.order }}</div>
+                    <div class="conversation-block-head">
+                        <h3>{{ form.name.value|default:form.instance.name }}</h3>
+                        <p>{{ form.message.value|default:form.instance.message }}</p>
+                    </div>
+                    <span class="conversation-block-pill {% if form.is_active.value %}activo{% else %}pendiente{% endif %}">
+                        {% if form.is_active.value %}Activo{% else %}Inactivo{% endif %}
+                    </span>
+                </div>
+
+                <div class="conversation-block-fields">
+                    <div class="conversation-field">
+                        <label>Orden</label>
+                        {{ form.order }}
+                    </div>
+                    <div class="conversation-field">
+                        <label>Nombre</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="conversation-field conversation-field-wide">
+                        <label>Mensaje</label>
+                        {{ form.message }}
+                    </div>
+                    <div class="conversation-field conversation-field-check">
+                        <label>{{ form.is_required }} Obligatorio</label>
+                    </div>
+                    <div class="conversation-field conversation-field-check">
+                        <label>{{ form.is_active }} Activo</label>
+                    </div>
+                    <div class="conversation-field conversation-field-check conversation-field-actions">
+                        {% if form.instance.pk %}
+                        <button
+                            type="submit"
+                            name="delete_block_id"
+                            value="{{ form.instance.pk }}"
+                            class="btn-danger"
+                            formnovalidate
+                            onclick="return confirm('¿Eliminar este bloque de conversación?');"
+                        >
+                            Eliminar
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if form.errors %}
+                <div class="conversation-block-errors">
+                    {{ form.errors }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="conversation-actions">
+            <button type="submit" name="action" value="add_block" class="btn-secondary" formnovalidate>
+                Agregar
+            </button>
+            <button type="submit" class="btn-primary">Guardar cambios</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

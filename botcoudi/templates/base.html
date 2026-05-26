@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BotCoudy{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <a href="{% url 'dashboard' %}" class="sidebar-brand">
+                <span>BotCoudy</span>
+            </a>
+            <nav class="sidebar-nav">
+                <a href="{% url 'dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'widget:prueba' %}" class="nav-item {% if request.resolver_match.url_name == 'prueba' %}active{% endif %}">
+                    <span>Prueba Widget</span>
+                </a>
+                <a href="{% url 'widget:configuracion_conversacion' %}" class="nav-item {% if request.resolver_match.url_name == 'configuracion_conversacion' %}active{% endif %}">
+                    <span>Configuración de conversación</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-wrapper">
+            <header class="top-header">
+                <h2 class="header-title">{% block header_title %}Panel de Control{% endblock %}</h2>
+            </header>
+
+            <main class="content-body">
+                {% block content %}
+                {% endblock %}
+            </main>
+
+            <footer class="footer">
+                <p>&copy; 2026 BotCoudy - Módulo de IA Aislado</p>
+            </footer>
+        </div>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

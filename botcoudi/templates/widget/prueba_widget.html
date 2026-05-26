@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Prueba de Widget - BotCoudy{% endblock %}
+{% block header_title %}Prueba del Widget{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ============================================
+       Layout de 2 columnas: Chat + Panel de Lead
+       ============================================ */
+    .widget-layout {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    @media (max-width: 1024px) {
+        .widget-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ============================================
+       Panel de datos del Lead (columna derecha)
+       ============================================ */
+    .lead-panel {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        padding: 0;
+        position: sticky;
+        top: 90px;
+        align-self: start;
+        overflow: hidden;
+    }
+
+    .lead-panel-header {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: #fff;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .lead-panel-header h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+        color: #fff;
+    }
+
+    .lead-panel-body {
+        padding: 16px 20px;
+    }
+
+    /* Cada campo capturado */
+    .lead-field {
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #f1f3f5;
+        gap: 10px;
+    }
+
+    .lead-field:last-child {
+        border-bottom: none;
+    }
+
+    .lead-field-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+
+    .lead-field-icon.pending {
+        background: #f8f9fa;
+        color: #adb5bd;
+    }
+
+    .lead-field-icon.captured {
+        background: #d4edda;
+        color: #28a745;
+    }
+
+    .lead-field-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .lead-field-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #adb5bd;
+        font-weight: 600;
+    }
+
+    .lead-field-value {
+        font-size: 0.9rem;
+        color: #343a40;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .lead-field-value.empty {
+        color: #ced4da;
+        font-style: italic;
+        font-weight: 400;
+    }
+
+    /* Badge de estado general */
+    .lead-status-bar {
+        padding: 12px 20px;
+        background: #f8f9fa;
+        border-top: 1px solid #f1f3f5;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .lead-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .lead-status-badge.in-progress {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .lead-status-badge.completed {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .lead-status-badge.abandoned {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .lead-step-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
+    /* ============================================
+       Indicador del proveedor en info del bot
+       ============================================ */
+    .provider-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .provider-badge.openai {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .provider-badge.claude {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .fallback-indicator {
+        color: #dc3545;
+        font-weight: 600;
+        font-size: 0.7rem;
+    }
+
+    /* Ajuste del chat wrapper para el layout */
+    .widget-layout .chat-test-wrapper {
+        max-width: 100%;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <p class="text-muted">Interactúa con el chatbot para validar el flujo de captura de leads.</p>
+</div>
+
+<div class="widget-layout">
+    <!-- ============================
+         Columna izquierda: Chat
+         ============================ -->
+    <div>
+        <div class="chat-test-wrapper">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message bot-message">
+                        <div class="message-content">
+                            {{ initial_bot_message }}
+                        </div>
+                    </div>
+                </div>
+            
+            <div class="chat-input-area">
+                <form id="chat-form">
+                    <div class="input-group">
+                        <input type="text" id="user-input" placeholder="Escribe tu mensaje aquí..." required autocomplete="off">
+                        <button type="submit" id="send-btn" class="btn-primary">Enviar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <div class="dashboard-card" style="max-width: 100%; padding: 12px 16px;">
+                <p style="margin:0;"><strong>Estado:</strong> <span id="connection-status">Listo para probar</span></p>
+                <p style="font-size: 0.8rem; margin: 4px 0 0 0;" class="text-muted">
+                    Endpoint: <code>/widget/api/mensaje/</code> · Escribe <strong>REINICIAR</strong> para limpiar la captura.
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================
+         Columna derecha: Panel Lead
+         ============================ -->
+    <div>
+        <div class="lead-panel" id="lead-panel">
+            <div class="lead-panel-header">
+                <span>📋</span>
+                <h3>Datos del Lead</h3>
+            </div>
+
+            <div class="lead-panel-body">
+                <!-- Nombre -->
+                <div class="lead-field">
+                    <div class="lead-field-icon pending" id="icon-nombre">👤</div>
+                    <div class="lead-field-info">
+                        <div class="lead-field-label">Nombre</div>
+                        <div class="lead-field-value empty" id="val-nombre">Pendiente</div>
+                    </div>
+                </div>
+
+                <!-- Teléfono -->
+                <div class="lead-field">
+                    <div class="lead-field-icon pending" id="icon-telefono">📞</div>
+                    <div class="lead-field-info">
+                        <div class="lead-field-label">Teléfono</div>
+                        <div class="lead-field-value empty" id="val-telefono">Pendiente</div>
+                    </div>
+                </div>
+
+                <!-- Email -->
+                <div class="lead-field">
+                    <div class="lead-field-icon pending" id="icon-email">📧</div>
+                    <div class="lead-field-info">
+                        <div class="lead-field-label">Email</div>
+                        <div class="lead-field-value empty" id="val-email">Pendiente</div>
+                    </div>
+                </div>
+
+                <!-- Disponibilidad -->
+                <div class="lead-field">
+                    <div class="lead-field-icon pending" id="icon-disponibilidad">🕐</div>
+                    <div class="lead-field-info">
+                        <div class="lead-field-label">Disponibilidad</div>
+                        <div class="lead-field-value empty" id="val-disponibilidad">Pendiente</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lead-status-bar">
+                <span class="lead-status-badge in-progress" id="lead-status-badge">
+                    ⏳ En progreso
+                </span>
+                <span class="lead-step-label" id="lead-step-label">Paso: nombre</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'js/widget.js' %}"></script>
+{% endblock %}

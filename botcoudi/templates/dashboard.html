@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - BotCoudy{% endblock %}
+{% block header_title %}Dashboard del Módulo de IA{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>Bienvenido</h1>
+    <p class="text-muted">Entorno aislado para pruebas de AI Manager, proveedores de IA, prompts y widget de Coudibot.</p>
+</div>
+
+<div class="cards-grid">
+    <!-- Estado del módulo IA -->
+    <div class="dashboard-card">
+        <h3>Estado del módulo IA</h3>
+        <p>Base aislada para pruebas de AI Manager. El sistema permite gestionar múltiples proveedores y flujos de conversación.</p>
+    </div>
+    
+    <!-- Widget de prueba -->
+    <div class="dashboard-card">
+        <h3>Widget de prueba</h3>
+        <p>Simula conversaciones y valida el flujo del chatbot en tiempo real con el backend de IA.</p>
+        <a href="{% url 'widget:prueba' %}" class="btn-primary">Probar widget</a>
+    </div>
+
+    <!-- Proveedores configurables -->
+    <div class="dashboard-card">
+        <h3>Proveedores configurables</h3>
+        <p>OpenAI y Claude se gestionan desde el panel administrativo, permitiendo ajustar modelos y claves.</p>
+    </div>
+</div>
+{% endblock %}
