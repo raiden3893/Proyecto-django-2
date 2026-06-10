@@ -15,8 +15,6 @@ class AIProviderConfigAdmin(admin.ModelAdmin):
         "model_name",
         "priority",
         "is_enabled",
-        "timeout_seconds",
-        "max_retries",
         "failure_policy",
         "updated_at",
     )
@@ -46,12 +44,6 @@ class AIProviderConfigAdmin(admin.ModelAdmin):
             "Proveedor y modelo",
             {
                 "fields": ("provider", "model_name", "priority", "is_enabled"),
-            },
-        ),
-        (
-            "Tiempo y reintentos",
-            {
-                "fields": ("timeout_seconds", "max_retries"),
             },
         ),
         (

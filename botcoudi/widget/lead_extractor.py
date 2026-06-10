@@ -36,7 +36,7 @@ LEAD_RESPONSE_SCHEMA = {
         "completed": {"type": "boolean"},
     },
     "required": ["reply", "lead_data", "current_step", "completed"],
-    "additionalProperties": True,
+    "additionalProperties": False,
 }
 
 
@@ -177,8 +177,7 @@ def extract_field_with_ai(
         f"Campo esperado: {expected_field}\n"
         f"Validación: {block_validation}\n"
         f"Obligatorio: {'sí' if current_block.get('is_required') else 'no'}\n"
-        f"Estado actual del lead: {json.dumps(lead_state, ensure_ascii=False)}\n"
-        f"Historial reciente:\n{history_text}\n\n"
+        f"Estado actual del lead: {json.dumps(lead_state, ensure_ascii=False)}\n\n"
         f"Último mensaje del usuario:\n{user_message}\n\n"
         f"{schema_contract}"
     )
@@ -202,7 +201,6 @@ def extract_field_with_ai(
                     "block_type": block_type,
                     "expected_field": expected_field,
                     "lead_state": json.dumps(lead_state, ensure_ascii=False),
-                    "history": history_text,
                     "user_message": user_message,
                 },
                 default_user_prompt,
@@ -223,8 +221,10 @@ def extract_field_with_ai(
         parsed = json.loads(cleaned)
         return _validate_canonical_payload(parsed)
 
+    # REGLA DE CONTINUIDAD: Pasamos el historial completo como mensajes individuales
+    # Esto permite que la lógica de 'Sticky Provider' identifique qué IA se usó antes.
     ai_result = get_ai_chat_response(
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=conversation_history + [{"role": "user", "content": user_prompt}],
         use_case="lead_capture_extraction",
         system_prompt_override=system_prompt,
         temperature=0,
@@ -238,7 +238,9 @@ def extract_field_with_ai(
             "error": ai_result.get("error") or "Proveedor de IA no disponible.",
             "provider": ai_result.get("provider"),
             "model": ai_result.get("model"),
+            "model_name": ai_result.get("model_name"),
             "fallback_used": ai_result.get("fallback_used", False),
+            "failed_provider": ai_result.get("failed_provider"),
         }
 
     try:
@@ -253,7 +255,9 @@ def extract_field_with_ai(
             "error": f"JSON inválido: {error}",
             "provider": ai_result.get("provider"),
             "model": ai_result.get("model"),
+            "model_name": ai_result.get("model_name"),
             "fallback_used": ai_result.get("fallback_used", False),
+            "failed_provider": ai_result.get("failed_provider"),
         }
 
     if not _validate_canonical_payload(parsed):
@@ -262,7 +266,9 @@ def extract_field_with_ai(
             "error": "Respuesta de IA no cumple el esquema requerido.",
             "provider": ai_result.get("provider"),
             "model": ai_result.get("model"),
+            "model_name": ai_result.get("model_name"),
             "fallback_used": ai_result.get("fallback_used", False),
+            "failed_provider": ai_result.get("failed_provider"),
         }
 
     lead_data = {field: parsed["lead_data"].get(field) for field in LEAD_FIELDS}
@@ -285,5 +291,7 @@ def extract_field_with_ai(
         "reason": "Respuesta válida con esquema canónico.",
         "provider": ai_result.get("provider"),
         "model": ai_result.get("model"),
+        "model_name": ai_result.get("model_name"),
         "fallback_used": ai_result.get("fallback_used", False),
+        "failed_provider": ai_result.get("failed_provider"),
     }

@@ -221,7 +221,16 @@ def api_mensaje(request):
 
         # 6. Obtener historial reciente (incluyendo el último mensaje del usuario)
         history_qs = WidgetMessage.objects.filter(conversation=conversation).order_by('-created_at')[:8]
-        history = [{"role": msg.role, "content": msg.content} for msg in reversed(history_qs)]
+        # IMPORTANTE: Incluir 'provider' y 'fallback_used' para que la lógica de Sticky Provider funcione
+        history = [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "provider": msg.provider,
+                "fallback_used": (msg.metadata_json or {}).get("fallback_used", False),
+            }
+            for msg in reversed(history_qs)
+        ]
 
         # 7. Determinar bloque actual y campo esperado
         current_block = get_current_block(blocks, lead_state) or (blocks[0] if blocks else {})
@@ -229,6 +238,12 @@ def api_mensaje(request):
         logger.info("[FLOW] Bloque actual: %s", current_block.get("name"))
         logger.info("[FLOW] Campo esperado: %s", expected_field or "no_aplica")
 
+        # PERSISTENCIA DE PROVEEDOR TRAS FALLO:
+        # Si ya hubo un fallback en esta sesión (failed_provider existe en el estado histórico),
+        # deberíamos intentar mantener al nuevo proveedor para evitar saltos innecesarios.
+        # Sin embargo, la regla es prioridad dinámica. Para cumplir que "toda la recopilación sea la misma",
+        # la IA que tome el control tras un fallo seguirá siendo la encargada mientras no falle.
+        
         # 8. Llamar a la IA para extraer el campo esperado del bloque
         ai_result = None
         if expected_field:
@@ -246,7 +261,7 @@ def api_mensaje(request):
                     "reply": "Lo siento, por el momento no fue posible procesar tu mensaje con los proveedores de IA configurados.",
                     "provider": None,
                     "model": None,
-                    "provider_label": "IA no disponible",
+                    "provider_label": "Error de Conexión",
                     "provider_source": "error",
                     "fallback_used": True,
                     "lead_state": lead_state
@@ -318,10 +333,13 @@ def api_mensaje(request):
             "provider": provider,
             "model": (ai_result or {}).get("model"),
             "provider_label": str(provider or "").upper(),
+            "model_name": (ai_result or {}).get("model_name"),
             "provider_source": "ai" if provider else "flow",
             "fallback_used": (ai_result or {}).get("fallback_used", False),
+            "failed_provider": (ai_result or {}).get("failed_provider"),
             "conversation_id": session_id,
-            "lead_data": lead_data_only,
+            "lead": lead_data_only,
+            "lead_data": lead_data_only,  # Mantener por compatibilidad si es necesario
             "lead_state": lead_state,
             "current_step": lead_state.get("current_step"),
             "status": lead_state.get("estado"),

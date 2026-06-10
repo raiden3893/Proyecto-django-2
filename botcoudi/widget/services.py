@@ -93,10 +93,31 @@ def get_ai_chat_response(
             "error": "No providers available"
         }
 
-    provider_list_str = ", ".join([f"{p['provider']}:{p['model']} (prioridad={getattr(p.get('config'), 'priority', 'env')})" for p in providers_to_try])
+    provider_list_str = ", ".join([
+        f"{p['provider']}:{p['model']} (prioridad={getattr(p.get('config'), 'priority', 'env')})"
+        for p in providers_to_try
+    ])
     logger.info("[AI_MANAGER] Proveedores activos encontrados: %s", provider_list_str)
 
+    # La prioridad del Admin es la unica fuente de verdad.
+    # No reordenamos por historial de conversación para evitar que un proveedor previo
+    # anule el orden configurado en la base de datos.
+    last_user_msg = ""
+    if messages:
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                last_user_msg = str(m.get("content", "")).lower()
+                break
+
+    logger.info(
+        "[AI_MANAGER] Orden efectivo tras DB: %s",
+        [f"{item['provider']}:{item['model']}" for item in providers_to_try],
+    )
+
     failed_providers = []
+
+    # Sanitizar mensajes para las APIs (quitar campos extra como 'provider')
+    clean_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
 
     for index, item in enumerate(providers_to_try):
         provider = item['provider']
@@ -114,14 +135,26 @@ def get_ai_chat_response(
                 api_key = settings.OPENAI_API_KEY
                 if not api_key:
                     raise Exception("OPENAI_API_KEY no configurada")
-                timeout = float(config.timeout_seconds) if config else 10.0
-                retries = int(config.max_retries) if config else 2
+                
+                # Widget optimization: try each provider only once
+                timeout = float(config.timeout_seconds) if config else 5.0
+                retries = 0 
+
+                # TEST: Disparador de fallo manual para verificar fallback
+                # Solo falla si el ÚLTIMO mensaje enviado por el usuario contiene "fallar"
+                if "fallar" in last_user_msg:
+                    # REGLA DE PRUEBA: Solo fallamos si este proveedor es el de mayor prioridad configurada
+                    # o si es el primero en este intento específico.
+                    primary_provider = providers_to_try[0]['provider']
+                    if provider == primary_provider:
+                        logger.warning("[TEST] Simulando fallo crítico del proveedor primario (%s) por trigger 'fallar'", provider)
+                        raise Exception(f"Error de conexión simulado en {provider} (Trigger detectado)")
                 
                 client = openai.OpenAI(api_key=api_key, timeout=timeout, max_retries=retries)
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": system_prompt}] + messages,
+                        messages=[{"role": "system", "content": system_prompt}] + clean_messages,
                         temperature=temperature,
                         response_format={"type": "json_object"} if "gpt-4" in model or "gpt-3.5-turbo-0125" in model else None
                     )
@@ -130,7 +163,7 @@ def get_ai_chat_response(
                     logger.warning("[AI_MANAGER] response_format no soportado, reintentando sin él: %s", error)
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": system_prompt}] + messages,
+                        messages=[{"role": "system", "content": system_prompt}] + clean_messages,
                         temperature=temperature,
                     )
                 reply = response.choices[0].message.content
@@ -144,25 +177,44 @@ def get_ai_chat_response(
                 api_key = settings.CLAUDE_API_KEY
                 if not api_key:
                     raise Exception("CLAUDE_API_KEY no configurada")
-                timeout = float(config.timeout_seconds) if config else 10.0
-                retries = int(config.max_retries) if config else 2
+                
+                # Widget optimization: try each provider only once
+                timeout = float(config.timeout_seconds) if config else 5.0
+                retries = 0
                 
                 client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=retries)
+                
+                # TEST: Disparador de fallo manual para Claude
+                if "fallar" in last_user_msg:
+                    primary_provider = providers_to_try[0]['provider']
+                    if provider == primary_provider:
+                        logger.warning("[TEST] Simulando fallo crítico del proveedor primario (%s) por trigger 'fallar'", provider)
+                        raise Exception(f"Error de conexión simulado en {provider} (Trigger detectado)")
+
                 claude_kwargs = {
                     "model": model,
                     "max_tokens": 2048,
                     "system": system_prompt,
-                    "messages": messages,
+                    "messages": clean_messages,
                     "temperature": temperature,
                 }
                 if response_schema:
-                    claude_kwargs["output_config"] = {
-                        "format": {
-                            "type": "json_schema",
-                            "schema": response_schema,
+                    # Intento de JSON mode para Claude (si el SDK/Modelo lo soporta)
+                    try:
+                        claude_kwargs["output_config"] = {
+                            "format": {
+                                "type": "json_schema",
+                                "schema": response_schema,
+                            }
                         }
-                    }
-                response = client.messages.create(**claude_kwargs)
+                        response = client.messages.create(**claude_kwargs)
+                    except Exception as e:
+                        logger.warning("[AI_MANAGER] Falló output_config en Claude, reintentando sin él: %s", e)
+                        claude_kwargs.pop("output_config", None)
+                        response = client.messages.create(**claude_kwargs)
+                else:
+                    response = client.messages.create(**claude_kwargs)
+                
                 reply = response.content[0].text
                 logger.info("[AI_MANAGER] Respuesta cruda recibida de %s: longitud=%d", provider, len(reply or ""))
                 raw_resp = {
@@ -192,7 +244,10 @@ def get_ai_chat_response(
                 "reply": reply,
                 "provider": provider,
                 "model": model,
+                "provider_label": provider.upper(),
+                "model_name": model,
                 "fallback_used": len(failed_providers) > 0,
+                "failed_provider": failed_providers[-1] if failed_providers else None,
                 "failed_providers": failed_providers
             }
 
@@ -211,5 +266,6 @@ def get_ai_chat_response(
         "ok": False,
         "reply": "Lo siento, por el momento no fue posible procesar tu mensaje con los proveedores de IA configurados.",
         "error": "All providers failed",
+        "failed_provider": failed_providers[-1] if failed_providers else None,
         "failed_providers": failed_providers
     }

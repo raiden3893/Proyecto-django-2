@@ -218,7 +218,28 @@ def get_block_expected_field(block: Dict[str, Any]) -> str:
     required_field = (block.get("required_field") or "").strip()
     if required_field:
         return required_field
-    return BLOCK_TYPE_FIELD_MAP.get((block.get("block_type") or "").strip(), "")
+    
+    # Mapeo inteligente si el campo manual está vacío
+    b_type = (block.get("block_type") or "").strip().lower()
+    # Usamos lower() para que no importe si es "Nombre", "nombre" o "NOMBRE"
+    b_name = (block.get("name") or "").strip().lower()
+    
+    # 1. Por tipo de bloque (Mapeo estricto primero)
+    field_by_type = BLOCK_TYPE_FIELD_MAP.get(b_type)
+    if field_by_type:
+        return field_by_type
+        
+    # 2. Por palabras clave en el nombre (resiliencia para bloques CUSTOM o nombres cambiados)
+    if any(kw in b_name for kw in ["nombre", "name"]):
+        return "nombre"
+    if any(kw in b_name for kw in ["telefono", "teléfono", "phone", "móvil", "movil"]):
+        return "telefono"
+    if any(kw in b_name for kw in ["email", "correo", "e-mail"]):
+        return "email"
+    if any(kw in b_name for kw in ["disponibilidad", "horario", "availability"]):
+        return "disponibilidad"
+        
+    return ""
 
 
 def get_first_action_block(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
