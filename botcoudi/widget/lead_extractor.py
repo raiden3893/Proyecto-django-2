@@ -7,9 +7,7 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from django.db.utils import OperationalError, ProgrammingError
-
-from ai_manage.models import AIPromptTemplate
+from .Prompt_manager import PromptManager
 from .services import get_ai_chat_response
 
 logger = logging.getLogger(__name__)
@@ -64,17 +62,6 @@ def _format_history(history: List[Dict[str, str]], limit: int = 6) -> str:
         return ""
     sliced = history[-limit:]
     return "\n".join(f"{item.get('role')}: {item.get('content')}" for item in sliced)
-
-
-def _safe_format_prompt(template: str, context: Dict[str, Any], fallback: str) -> str:
-    try:
-        formatted = template
-        for key, value in context.items():
-            formatted = formatted.replace(f"{{{key}}}", str(value))
-        return formatted
-    except Exception as error:
-        logger.warning("[AI_MANAGER] Plantilla de prompt inválida, usando fallback: %s", error)
-        return fallback
 
 
 def _build_schema_contract() -> str:
@@ -182,39 +169,30 @@ def extract_field_with_ai(
         f"{schema_contract}"
     )
 
-    try:
-        prompt_template = (
-            AIPromptTemplate.objects.filter(use_case="lead_capture_extraction", is_active=True)
-            .order_by("-updated_at")
-            .first()
-        )
-        if prompt_template:
-            system_prompt = (prompt_template.system_prompt or default_system_prompt).strip()
-            if schema_contract not in system_prompt:
-                system_prompt = f"{system_prompt}\n\n{schema_contract}"
+    # 1. Resolver System Prompt usando el Manager (Caso: lead_capture_extraction)
+    system_prompt = PromptManager.resolve_system_prompt("lead_capture_extraction", default_system_prompt)
+    if schema_contract not in system_prompt:
+        system_prompt = f"{system_prompt}\n\n{schema_contract}"
 
-            user_prompt_source = prompt_template.user_prompt_template or default_user_prompt
-            user_prompt = _safe_format_prompt(
-                user_prompt_source,
-                {
-                    "block_name": block_name,
-                    "block_type": block_type,
-                    "expected_field": expected_field,
-                    "lead_state": json.dumps(lead_state, ensure_ascii=False),
-                    "user_message": user_message,
-                },
-                default_user_prompt,
-            )
-            if flow_context not in user_prompt:
-                user_prompt = f"{flow_context}\n{user_prompt}"
-            if schema_contract not in user_prompt:
-                user_prompt = f"{user_prompt}\n\n{schema_contract}"
-        else:
-            system_prompt = default_system_prompt
-            user_prompt = default_user_prompt
-    except (OperationalError, ProgrammingError):
-        system_prompt = default_system_prompt
-        user_prompt = default_user_prompt
+    # 2. Preparar contexto y resolver User Prompt usando el Manager
+    user_context = {
+        "block_name": block_name,
+        "block_type": block_type,
+        "block_order": str(block_order),
+        "block_message": block_message,
+        "block_validation": block_validation,
+        "expected_field": expected_field,
+        "lead_state": json.dumps(lead_state, ensure_ascii=False),
+        "user_message": user_message,
+    }
+
+    user_prompt = PromptManager.resolve_user_prompt("lead_capture_extraction", user_context, default_user_prompt)
+    
+    # 3. Asegurar que el contexto técnico y el contrato JSON se mantengan presentes
+    if flow_context not in user_prompt:
+        user_prompt = f"{flow_context}\n{user_prompt}"
+    if schema_contract not in user_prompt:
+        user_prompt = f"{user_prompt}\n\n{schema_contract}"
 
     def _json_validator(raw_text: str) -> bool:
         cleaned = clean_json_text(raw_text)

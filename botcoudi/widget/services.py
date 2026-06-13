@@ -4,8 +4,8 @@ import json
 from django.conf import settings
 from django.db.utils import OperationalError, ProgrammingError
 from ai_manage.models import AIProviderConfig, AIPromptTemplate
-from .models import AICallLog
-
+from .models import AICallLog # Importar AICallLog desde el mismo directorio
+from .Prompt_manager import PromptManager # Importar PromptManager desde el mismo directorio
 # Intentar importar las librerías necesarias
 try:
     import openai
@@ -18,7 +18,7 @@ except ImportError:
     anthropic = None
 
 logger = logging.getLogger(__name__)
-
+    
 def _save_call_log(provider, model, status, request_data, response_data, error=None, latency=0):
     """
     Guarda el log de la llamada en la base de datos.
@@ -48,24 +48,17 @@ def get_ai_chat_response(
     Obtiene una respuesta de la IA con fallback y persistencia.
     Optimizado para devolver JSON estructurado.
     """
-    # 1. Obtener configuraciones habilitadas por prioridad
+    
     configs = []
+    
+    default_system = "Eres un asistente para BotCoudy. Responde de forma amable."
+    
     try:
         configs = list(AIProviderConfig.objects.filter(is_enabled=True).order_by('priority', 'id'))
+        system_prompt = PromptManager.resolve_system_prompt(use_case, default_system)
     except Exception as error:
-        logger.warning("[AI_MANAGER] AI config DB no disponible o error: %s", error)
-
-    # 2. Definir Prompt del Sistema (Prioridad: DB > Override > Default)
-    system_prompt = "Eres un asistente para BotCoudy. Responde de forma amable."
-    
-    # Intentar obtener de base de datos primero para permitir control total desde el Admin
-    try:
-        prompt_template = AIPromptTemplate.objects.filter(use_case=use_case, is_active=True).first()
-        if prompt_template and prompt_template.system_prompt:
-            system_prompt = prompt_template.system_prompt
-            logger.info("[AI_MANAGER] Usando prompt de base de datos: %s", prompt_template.name)
-    except Exception as error:
-        logger.warning("[AI_MANAGER] Prompt template DB error: %s. Usando override si existe.", error)
+        logger.warning("[AI_MANAGER] Error cargando config/prompts: %s", error)
+        system_prompt = default_system
 
     if system_prompt_override:
         if system_prompt:

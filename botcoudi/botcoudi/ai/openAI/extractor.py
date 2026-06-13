@@ -17,6 +17,7 @@ def extraer_datos_via_openai(
     raise_on_error=False,
     timeout_seconds=None,
     max_retries=None,
+    system_prompt_override=None
 ):
     if timeout_seconds is None:
         timeout_seconds = os.getenv("OPENAI_TIMEOUT", "5")
@@ -91,9 +92,10 @@ def extraer_datos_via_openai(
 
     # Procesar el historial para marcar claramente usuario vs bot
     historial_procesado = historial_texto.replace("user:", "Usuario:").replace("bot:", "Bot:")
+    final_system_prompt = system_prompt_override or prompt_config['sistema']
 
     messages = [
-        {"role": "system", "content": prompt_config['sistema']},
+        {"role": "system", "content": final_system_prompt},
         {"role": "user", "content": prompt_config['user_prompt'].format(historial_procesado=historial_procesado)}
     ]
 
